@@ -9,8 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
 
     <!-- Font Awesome -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
 <style>
 /* ===============================
@@ -23,7 +22,6 @@
     --gold-soft: rgba(201,162,77,0.6);
     --white: #fff;
     --muted: #aaa;
-    --font-main: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 * {
@@ -33,7 +31,7 @@
 }
 
 body {
-    font-family: var(--font-main);
+    font-family: 'Inter', sans-serif;
     background: var(--black);
     color: var(--white);
     min-height: 100vh;
@@ -69,17 +67,19 @@ header {
 }
 
 .logo {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Inter', sans-serif;
     font-size: 22px;
     letter-spacing: 1px;
     color: var(--gold);
 }
 
-/* ===============================
-   DESKTOP NAV
-================================ */
+/* Desktop nav */
+.nav-close {
+    display: none;
+}
+
 .mobile-nav {
-    position: static;
+    margin-left: auto;
 }
 
 .mobile-nav ul {
@@ -110,12 +110,7 @@ header {
     width: 100%;
 }
 
-/* Hide close arrow on desktop */
-.nav-close {
-    display: none;
-}
-
-/* Hamburger hidden on desktop */
+/* Hamburger */
 .menu-toggle {
     display: none;
     font-size: 22px;
@@ -123,25 +118,14 @@ header {
     cursor: pointer;
 }
 
-/* Force desktop nav to the right */
-@media (min-width: 769px) {
-    .mobile-nav {
-        margin-left: auto;
-    }
-}
-
-
 /* ===============================
-   MOBILE NAV
+   SLIDE-IN MOBILE MENU
 ================================ */
 @media (max-width: 768px) {
-
-    /* Show hamburger */
     .menu-toggle {
         display: block;
     }
 
-    /* Slide-in nav */
     .mobile-nav {
         position: fixed;
         top: 0;
@@ -160,6 +144,10 @@ header {
         right: 0;
     }
 
+    .mobile-nav.active .nav-close {
+        display: block;
+    }
+
     .mobile-nav ul {
         flex-direction: column;
         gap: 0;
@@ -174,18 +162,6 @@ header {
         padding: 18px 24px;
     }
 
-    /* Show close arrow on mobile */
-    .nav-close {
-        display: block;
-        position: absolute;
-        top: 24px;
-        right: 24px;
-        font-size: 20px;
-        color: var(--gold);
-        cursor: pointer;
-    }
-
-    /* Overlay */
     .nav-overlay {
         position: fixed;
         inset: 0;
@@ -201,6 +177,25 @@ header {
         pointer-events: all;
     }
 }
+
+/* Close arrow inside mobile nav */
+.nav-close {
+    position: absolute;
+    top: 24px;
+    right: 24px;
+    font-size: 20px;
+    color: var(--gold);
+    cursor: pointer;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.nav-close:hover {
+    transform: translateX(4px);
+    opacity: 0.8;
+}
+
+
+
 
 /* ===============================
    MAIN CONTENT
@@ -229,7 +224,7 @@ footer {
 }
 
 .footer-brand {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Inter', sans-serif;
     color: var(--gold);
     font-size: 18px;
 }
@@ -263,6 +258,10 @@ footer {
     text-align: center;
 }
 
+
+
+
+
 /* ===============================
    FLOATING CART
 ================================ */
@@ -279,13 +278,51 @@ footer {
     align-items: center;
     gap: 12px;
     z-index: 9999;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    transition: all 0.3s ease;
+}
+
+.floating-cart:hover {
+    background: var(--gold);
+    color: #000;
+}
+
+.cart-icon {
+    position: relative;
+    font-size: 20px;
+}
+
+.cart-count {
+    position: absolute;
+    top: -6px;
+    right: -8px;
+    background: var(--gold);
+    color: #000;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 50%;
 }
 
 .cart-summary {
     display: flex;
     flex-direction: column;
+    line-height: 1.1;
 }
 
+.cart-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.8;
+}
+
+.cart-total {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* Cart mobile */
 @media (max-width: 768px) {
     .cart-summary {
         display: none;
@@ -293,9 +330,8 @@ footer {
 }
 </style>
 
-{% block extra_css %}{% endblock %}
+    {% block extra_css %}{% endblock %}
 </head>
-
 <body>
 
 <header>
@@ -303,21 +339,24 @@ footer {
         <div class="logo">CKC Jewelry</div>
 
         <nav class="mobile-nav">
+            <!-- Close arrow -->
             <div class="nav-close" onclick="toggleMenu()">
                 <i class="fas fa-arrow-right"></i>
             </div>
 
-            <ul>
+            <ul id="navLinks">
                 <li><a href="{{ url_for('home') }}">Home</a></li>
                 <li><a href="{{ url_for('reviews') }}">Reviews</a></li>
                 <li><a href="{{ url_for('contact') }}">Contact</a></li>
             </ul>
         </nav>
 
+
         <div class="menu-toggle" onclick="toggleMenu()">
             <i class="fas fa-bars"></i>
         </div>
 
+        <!-- Overlay -->
         <div class="nav-overlay" onclick="toggleMenu()"></div>
     </div>
 </header>
@@ -328,7 +367,9 @@ footer {
 
 <footer>
     <div class="footer-container">
-        <div class="footer-brand">CKC Jewelry Zambia</div>
+        <div class="footer-brand">
+            CKC Jewelry Zambia
+        </div>
 
         <div class="footer-socials">
             <a href="https://www.instagram.com/ckcjewelryzambia/?hl=en" target="_blank">
@@ -345,11 +386,88 @@ footer {
     </div>
 </footer>
 
+<!-- Floating Cart -->
+{% if not hide_cart %}
+<a href="{{ url_for('checkout') }}" class="floating-cart">
+
+    <div class="cart-icon">
+        <i class="fas fa-shopping-bag"></i>
+
+        <!-- cart-count must ALWAYS exist -->
+        <span class="cart-count"
+              style="display: {% if number_of_items > 0 %}inline-block{% else %}none{% endif %};">
+            {{ number_of_items or 0 }}
+        </span>
+    </div>
+
+    <div class="cart-summary">
+        <span class="cart-label">Cart Total</span>
+        <span class="cart-total">
+            ZMW {{ "%.2f"|format(accumulated_total or 0) }}
+        </span>
+    </div>
+
+</a>
+{% endif %}
+
+
+
 <script>
+
+
 function toggleMenu() {
-    document.querySelector(".mobile-nav").classList.toggle("active");
-    document.querySelector(".nav-overlay").classList.toggle("active");
+    const nav = document.querySelector(".mobile-nav");
+    const overlay = document.querySelector(".nav-overlay");
+
+    nav.classList.toggle("active");
+    overlay.classList.toggle("active");
 }
+
+document.addEventListener("DOMContentLoaded", function () {
+
+    document.querySelectorAll(".buy-now-btn").forEach(button => {
+        button.addEventListener("click", function () {
+
+            const product = {
+                id: this.dataset.id,
+                name: this.dataset.name,
+                price: this.dataset.price,
+                image: this.dataset.image
+            };
+
+            fetch("/add-to-cart", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(product)
+            })
+            .then(response => response.json())
+            .then(data => {
+
+                // Update cart count
+                const cartCount = document.querySelector(".cart-count");
+                if (cartCount) {
+                    cartCount.textContent = data.number_of_items;
+                    cartCount.style.display = "inline-block";
+                }
+
+                // Update cart total
+                const cartTotal = document.querySelector(".cart-total");
+                if (cartTotal) {
+                    cartTotal.textContent = "ZMW " + Number(data.accumulated_total).toFixed(2);
+                }
+
+                alert(data.message);
+            })
+            .catch(error => {
+                console.error("Error adding to cart:", error);
+            });
+
+        });
+    });
+
+});
 </script>
 
 </body>
