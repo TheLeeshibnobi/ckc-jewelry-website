@@ -283,7 +283,145 @@
 </section>
 
 <script>
-/* quantity + remove JS unchanged */
+/* =====================================================
+   CHECKOUT INTERACTIONS
+   - Remove item
+   - Update quantity (+ / − / input)
+===================================================== */
+
+document.addEventListener("click", async (e) => {
+
+    /* ===============================
+       REMOVE ITEM (X BUTTON)
+    ================================ */
+    const removeBtn = e.target.closest(".remove-item");
+    if (removeBtn) {
+        e.preventDefault();
+
+        const productId = removeBtn.dataset.productId;
+        const cartItem = removeBtn.closest(".cart-item");
+
+        if (!productId || !cartItem) return;
+
+        try {
+            const response = await fetch("/remove-from-cart", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ product_id: productId })
+            });
+
+            const data = await response.json();
+            if (!data.success) throw new Error(data.message);
+
+            /* Remove item from UI */
+            cartItem.remove();
+
+            updateSummary(data);
+
+            /* Empty cart state */
+            if (data.number_of_items === 0) {
+                document.querySelector(".cart-box").innerHTML =
+                    "<p>Your cart is empty.</p>";
+            }
+
+        } catch (error) {
+            console.error("Remove item error:", error);
+            alert("Failed to remove item. Please try again.");
+        }
+
+        return;
+    }
+
+    /* ===============================
+       QUANTITY BUTTONS (+ / −)
+    ================================ */
+    const qtyBtn = e.target.closest(".qty-btn");
+    if (qtyBtn) {
+        const cartItem = qtyBtn.closest(".cart-item");
+        const input = cartItem.querySelector(".qty-input");
+
+        let quantity = parseInt(input.value, 10) || 1;
+
+        if (qtyBtn.textContent.trim() === "−") {
+            quantity = Math.max(1, quantity - 1);
+        } else {
+            quantity += 1;
+        }
+
+        input.value = quantity;
+        await sendQuantityUpdate(input.dataset.productId, quantity);
+    }
+});
+
+/* ===============================
+   MANUAL QUANTITY INPUT
+================================ */
+document.addEventListener("change", async (e) => {
+    const input = e.target.closest(".qty-input");
+    if (!input) return;
+
+    let quantity = parseInt(input.value, 10);
+
+    if (!quantity || quantity < 1) {
+        quantity = 1;
+        input.value = 1;
+    }
+
+    await sendQuantityUpdate(input.dataset.productId, quantity);
+});
+
+/* ===============================
+   SEND QUANTITY UPDATE
+================================ */
+async function sendQuantityUpdate(productId, quantity) {
+    try {
+        const response = await fetch("/update-quantity", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                product_id: productId,
+                quantity: quantity
+            })
+        });
+
+        const data = await response.json();
+        if (!data.success) throw new Error(data.message);
+
+        updateSummary(data);
+
+    } catch (error) {
+        console.error("Quantity update error:", error);
+        alert("Failed to update quantity. Please try again.");
+    }
+}
+
+/* ===============================
+   UPDATE SUMMARY TOTALS
+================================ */
+function updateSummary(data) {
+
+    /* Item count */
+    const itemsLabel = document.querySelector(".summary-row span");
+    if (itemsLabel && data.number_of_items !== undefined) {
+        itemsLabel.textContent = `Items (${data.number_of_items})`;
+    }
+
+    /* Subtotal & total */
+    const subtotal = document.querySelector(".summary-subtotal");
+    const total = document.querySelector(".summary-total-amount");
+
+    if (subtotal) {
+        subtotal.textContent =
+            "ZMW " + Number(data.accumulated_total).toFixed(2);
+    }
+
+    if (total) {
+        total.textContent =
+            "ZMW " + Number(data.accumulated_total).toFixed(2);
+    }
+}
 </script>
+
+
 
 {% endblock %}

@@ -372,12 +372,15 @@
                 </span>
 
                 <button
-                    class="buy-btn"
-                    data-product-id="{{ product.id }}"
+                    class="buy-btn buy-now-btn"
+                    data-id="{{ product.id }}"
+                    data-name="{{ product.name }}"
                     data-price="{{ product.price }}"
+                    data-image="{{ product.images[0] if product.images else '' }}"
                 >
                     Add to Cart
                 </button>
+
             </div>
 
         </div>

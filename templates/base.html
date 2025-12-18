@@ -413,8 +413,6 @@ footer {
 
 
 <script>
-
-
 function toggleMenu() {
     const nav = document.querySelector(".mobile-nav");
     const overlay = document.querySelector(".nav-overlay");
@@ -423,52 +421,83 @@ function toggleMenu() {
     overlay.classList.toggle("active");
 }
 
-document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", () => {
 
-    document.querySelectorAll(".buy-now-btn").forEach(button => {
-        button.addEventListener("click", function () {
+    document.addEventListener("click", async (e) => {
+        const button = e.target.closest(".buy-now-btn");
+        if (!button) return;
 
-            const product = {
-                id: this.dataset.id,
-                name: this.dataset.name,
-                price: this.dataset.price,
-                image: this.dataset.image
-            };
+        e.preventDefault();
+        e.stopPropagation();
 
-            fetch("/add-to-cart", {
+        // Prevent double click
+        if (button.dataset.loading === "1") return;
+        button.dataset.loading = "1";
+
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = "Adding...";
+
+        const product = {
+            id: button.dataset.id,
+            name: button.dataset.name,
+            price: button.dataset.price,
+            image: button.dataset.image
+        };
+
+        try {
+            const response = await fetch("/add-to-cart", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(product)
-            })
-            .then(response => response.json())
-            .then(data => {
-
-                // Update cart count
-                const cartCount = document.querySelector(".cart-count");
-                if (cartCount) {
-                    cartCount.textContent = data.number_of_items;
-                    cartCount.style.display = "inline-block";
-                }
-
-                // Update cart total
-                const cartTotal = document.querySelector(".cart-total");
-                if (cartTotal) {
-                    cartTotal.textContent = "ZMW " + Number(data.accumulated_total).toFixed(2);
-                }
-
-                alert(data.message);
-            })
-            .catch(error => {
-                console.error("Error adding to cart:", error);
             });
 
-        });
+            const contentType = response.headers.get("content-type") || "";
+            let data = {};
+
+            if (contentType.includes("application/json")) {
+                data = await response.json();
+            } else {
+                data.success = response.ok;
+            }
+
+            if (!response.ok || data.success === false) {
+                throw new Error(data.message || "Add to cart failed");
+            }
+
+            /* Update cart count */
+            const cartCount = document.querySelector(".cart-count");
+            if (cartCount && data.number_of_items !== undefined) {
+                cartCount.textContent = data.number_of_items;
+                cartCount.style.display = "inline-block";
+            }
+
+            /* Update cart total */
+            const cartTotal = document.querySelector(".cart-total");
+            if (cartTotal && data.accumulated_total !== undefined) {
+                cartTotal.textContent =
+                    "ZMW " + Number(data.accumulated_total).toFixed(2);
+            }
+
+            /* Visual feedback */
+            button.textContent = "Added ✓";
+            setTimeout(() => {
+                button.textContent = originalText;
+            }, 1200);
+
+        } catch (error) {
+            console.error("Error adding to cart:", error);
+            alert("Failed to add item to cart. Please try again.");
+        } finally {
+            button.dataset.loading = "0";
+            button.disabled = false;
+        }
     });
 
 });
 </script>
+
+
 
 </body>
 </html>

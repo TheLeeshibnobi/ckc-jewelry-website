@@ -49,20 +49,38 @@ class Cart:
         )
 
     def update_quantity(self, product_id, quantity):
-        quantity = int(quantity)
+        try:
+            quantity = int(quantity)
 
-        for item in self.items:
-            if item["product_id"] == product_id:
-                item["quantity"] = max(1, quantity)
-                break
+            for item in self.items:
+                if item["product_id"] == product_id:
+                    item["quantity"] = max(1, quantity)
+                    break
+            else:
+                return {
+                    "success": False,
+                    "message": "Item not found",
+                    "number_of_items": len(self.items),
+                    "accumulated_total": float(self.accumulated_total)
+                }
 
-        self.recalculate_total()
+            self.recalculate_total()
 
-        return {
-            "number_of_items": len(self.items),
-            "accumulated_total": self.accumulated_total
-        }
+            return {
+                "success": True,
+                "message": "Quantity updated",
+                "number_of_items": len(self.items),
+                "accumulated_total": float(self.accumulated_total)
+            }
 
+        except Exception as e:
+            print(f"[Cart.update_quantity] Error: {e}")
+            return {
+                "success": False,
+                "message": "Server error",
+                "number_of_items": len(self.items),
+                "accumulated_total": float(self.accumulated_total)
+            }
 
     def remove_from_cart(self, product_id):
         """
