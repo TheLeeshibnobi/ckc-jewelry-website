@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% set hide_cart = true %}
+
+{% block title %}Payment · CKC Jewelry Zambia{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ===============================
+   PAYOUT PAGE
+================================ */
+.payout-page {
+    padding: 70px 20px;
+    max-width: 460px;
+    margin: auto;
+}
+
+.payout-box {
+    background: #0e0e0e;
+    border: 1px solid rgba(201,162,77,0.15);
+    border-radius: 18px;
+    padding: 30px;
+    text-align: center;
+}
+
+/* Headings */
+.payout-box h2 {
+    font-family: 'Playfair Display', serif;
+    color: var(--gold);
+    font-size: 26px;
+    margin-bottom: 8px;
+}
+
+.payout-box p {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 26px;
+    line-height: 1.6;
+}
+
+/* Amount */
+.payout-amount {
+    font-size: 32px;
+    font-weight: 600;
+    color: var(--gold);
+    margin-bottom: 20px;
+}
+
+/* Summary */
+.payout-summary {
+    border-top: 1px solid rgba(201,162,77,0.2);
+    border-bottom: 1px solid rgba(201,162,77,0.2);
+    padding: 18px 0;
+    margin-bottom: 24px;
+}
+
+.summary-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+.summary-row:last-child {
+    margin-bottom: 0;
+}
+
+/* Pay button */
+.pay-now-btn {
+    width: 100%;
+    padding: 16px;
+    background: var(--gold);
+    color: #000;
+    font-weight: 600;
+    border: none;
+    border-radius: 14px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.pay-now-btn:hover {
+    background: #fff;
+}
+
+/* Small reassurance text */
+.secure-text {
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+    .payout-box {
+        padding: 24px;
+    }
+
+    .payout-amount {
+        font-size: 30px;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<section class="payout-page">
+    <div class="payout-box">
+
+        <h2>Almost There</h2>
+        <p>Please review your order summary below and proceed to payment.</p>
+
+        <!-- TOTAL -->
+        <div class="payout-amount">
+            ZMW {{ accumulated_total | default("0.00") }}
+        </div>
+
+        <!-- SUMMARY -->
+        <div class="payout-summary">
+            <div class="summary-row">
+                <span>Items</span>
+                <span>{{ number_of_items | default(0) }}</span>
+            </div>
+
+            <div class="summary-row">
+                <span>Delivery</span>
+                <span>As provided</span>
+            </div>
+        </div>
+
+        <!-- PAY NOW -->
+        <button class="pay-now-btn" onclick="window.location.href='{{ url_for('paid') }}'">
+            Pay Now
+        </button>
+
+        <div class="secure-text">
+            Secure payment · You will receive confirmation after payment
+        </div>
+
+    </div>
+</section>
+
+{% endblock %}
