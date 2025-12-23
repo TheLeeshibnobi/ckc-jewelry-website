@@ -160,9 +160,7 @@ def pay_now():
 
 
 
-from flask import session, redirect, url_for, render_template
-import os
-from checkout import Checkout
+
 
 @app.route("/payout")
 def payout():

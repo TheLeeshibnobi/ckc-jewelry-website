@@ -130,18 +130,18 @@ class Checkout:
 
     def create_order(self, customer_id, delivery_location, total_amount):
         """
-        Creates an order and returns the created order record.
-        Supabase auto-generates the primary key (UUID).
+        Creates an order row WITHOUT products.
+        Products are attached later.
         """
         try:
             payload = {
                 "business_id": self.business_id,
                 "customer_id": customer_id,
-                "total_amount": total_amount,
+                "total_amount": str(total_amount),  # keep consistent with DB
                 "order_status": "pending",
                 "order_payment_status": "pending",
                 "delivery_location": delivery_location,
-                "products": []  # attached later
+                "products": []  # initialize as empty JSON array
             }
 
             response = (
@@ -154,7 +154,7 @@ class Checkout:
             if not response.data:
                 raise Exception("Order insert failed")
 
-            return response.data[0]  # contains auto-generated id
+            return response.data[0]
 
         except Exception as e:
             print("Error creating order:", e)
@@ -162,8 +162,8 @@ class Checkout:
 
     def upload_order_images(self, order_id, cart_items):
         """
-        Upload product images to:
-        uploaded-files/orders/{order_id}/
+        Upload product images and return products JSON
+        matching DB structure exactly.
         """
         products_json = []
 
@@ -195,15 +195,19 @@ class Checkout:
         return products_json
 
     def attach_products_to_order(self, order_id, products_json):
+        """
+        Attaches finalized products JSON to an order.
+        """
         try:
-            self.supabase \
-                .table("orders") \
-                .update({"products": products_json}) \
-                .eq("id", order_id) \
+            (
+                self.supabase
+                .table("orders")
+                .update({"products": products_json})
+                .eq("id", order_id)
                 .execute()
+            )
         except Exception as e:
             print("Error attaching products:", e)
-
 
     def create_customer(self, name, email, phone, location, gender):
         """
