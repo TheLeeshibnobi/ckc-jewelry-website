@@ -7,6 +7,7 @@ from flask_compress import Compress
 from cart import Cart
 from products import Products
 from checkout import Checkout
+from pay import Pay
 
 cart = Cart()
 
@@ -295,6 +296,34 @@ def payout():
         return redirect(url_for("checkout"))
 
 
+@app.route('/process-payment', methods=['POST'])
+def process_payment():
+    if not session.get("order_id") or not session.get("checkout_phone"):
+        return redirect(url_for("checkout"))
+
+    pay_tool = Pay()
+
+    order_id = session["order_id"]
+    phone = session["checkout_phone"]
+
+    try:
+        amount = pay_tool.get_order_amount(order_id)
+
+        result = pay_tool.process_payment(
+            order_id=order_id,
+            phone=phone,
+            amount=amount
+        )
+
+        # Save transaction token if you want
+        session["transaction_id"] = result["token"]
+
+        # 🚀 REDIRECT TO TECHPAY HOSTED CHECKOUT
+        return redirect(result["payment_link"])
+
+    except Exception as e:
+        print(f"Payment initiation error: {e}")
+        return redirect(url_for("payout"))
 
 
 
