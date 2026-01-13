@@ -39,6 +39,8 @@ def home():
 
 @app.route("/add-to-cart", methods=["POST"])
 def add_to_cart():
+    session.pop("order_id", None)
+
     data = request.json
 
     result = cart.add_to_cart(
@@ -63,6 +65,8 @@ def checkout():
 
 @app.route("/update-quantity", methods=["POST"])
 def update_quantity():
+    session.pop("order_id", None)
+
     data = request.json
 
     result = cart.update_quantity(
@@ -75,6 +79,9 @@ def update_quantity():
 
 @app.route("/remove-from-cart", methods=["POST"])
 def remove_from_cart():
+    session.pop("order_id", None)
+
+
     data = request.json or {}
     product_id = data.get("product_id")
 
@@ -135,29 +142,67 @@ def pay_now():
     checkout = Checkout()
 
     try:
-        phone = request.form.get("phone")
+        # -------------------------------
+        # BASIC GUARDS
+        # -------------------------------
+        if not cart.items:
+            return redirect(url_for("checkout"))
 
+        phone = request.form.get("phone")
         if not phone:
             return redirect(url_for("checkout"))
 
-        # Check customer
-        result = checkout.check_customer(phone)
+        # Normalize & store phone
+        clean_phone = checkout.clean_phone(phone)
+        session["checkout_phone"] = clean_phone
 
-        # Store normalized phone for later steps
-        session["checkout_phone"] = checkout.clean_phone(phone)
+        # -------------------------------
+        # CAPTURE DELIVERY LOCATION
+        # -------------------------------
+        delivery_location = request.form.get("delivery_location")
+        session["delivery_location"] = delivery_location
+
+        # -------------------------------
+        # CAPTURE PER-PRODUCT DATA
+        # -------------------------------
+        for item in cart.items:
+            product_id = item["product_id"]
+
+            # Special instructions
+            instruction = request.form.get(f"instruction_{product_id}")
+            item["instruction"] = instruction
+
+            # Image upload
+            image_file = request.files.get(f"image_{product_id}")
+            if image_file and image_file.filename:
+                temp_dir = "/tmp"
+                os.makedirs(temp_dir, exist_ok=True)
+
+                temp_path = os.path.join(temp_dir, image_file.filename)
+                image_file.save(temp_path)
+
+                item["local_image_path"] = temp_path
+            else:
+                item["local_image_path"] = None
+
+        # -------------------------------
+        # CHECK / CREATE CUSTOMER
+        # -------------------------------
+        result = checkout.check_customer(clean_phone)
 
         if result["exists"]:
             # Existing customer
             session["customer_id"] = result["customer"]["id"]
             return redirect(url_for("payout"))
 
-        # New customer
+        # New customer → continue to customer form
         session.pop("customer_id", None)
         return redirect(url_for("customer"))
 
     except Exception as e:
         print("Pay now error:", e)
         return redirect(url_for("checkout"))
+
 
 
 
@@ -171,55 +216,82 @@ def payout():
     if not session.get("customer_id"):
         return redirect(url_for("checkout"))
 
-    checkout = Checkout()
-
-    # -------------------------------
-    # ORDER CREATION GUARD (refresh-safe)
-    # -------------------------------
-    if session.get("order_id"):
-        order_id = session["order_id"]
-
-        try:
-            # pull order from DB so totals stay correct even if cart is cleared
-            resp = (
-                checkout.supabase
-                .table("orders")
-                .select("id,total_amount,products,delivery_location,order_status,order_payment_status")
-                .eq("id", order_id)
-                .limit(1)
-                .execute()
-            )
-
-            order = resp.data[0] if resp.data else None
-            if not order:
-                # if order missing, reset session and restart flow
-                session.pop("order_id", None)
-                return redirect(url_for("checkout"))
-
-            products = order.get("products") or []
-            number_of_items = sum((p.get("quantity") or 0) for p in products) if products else 0
-
-            return render_template(
-                "payout.html",
-                accumulated_total=order.get("total_amount", 0),
-                number_of_items=number_of_items
-            )
-
-        except Exception as e:
-            print("Payout guard fetch error:", e)
-            return redirect(url_for("checkout"))
-
-    # If we're here, no existing order yet — we must have cart items to create one
+    # If cart is empty, user should not be here
     if not cart.items:
         return redirect(url_for("checkout"))
 
     try:
-        customer_id = session.get("customer_id")
+        # Calculate number of items (sum quantities)
+        number_of_items = sum(
+            (item.get("quantity") or 0) for item in cart.items
+        )
+
+        # Read total directly from cart (NO DB)
+        accumulated_total = cart.accumulated_total
+
+        return render_template(
+            "payout.html",
+            accumulated_total=accumulated_total,
+            number_of_items=number_of_items
+        )
+
+    except Exception as e:
+        print("Payout route error:", e)
+        return redirect(url_for("checkout"))
+
+
+
+@app.route('/process-payment', methods=['POST'])
+def process_payment():
+
+    if not session.get("customer_id") or not session.get("checkout_phone"):
+        return redirect(url_for("checkout"))
+
+    if not cart.items:
+        return redirect(url_for("checkout"))
+
+    checkout = Checkout()
+    pay_tool = Pay()
+
+    try:
+        phone = session["checkout_phone"]
+        customer_id = session["customer_id"]
         delivery_location = session.get("delivery_location", "")
+
+        # -------------------------------
+        # 1. CALCULATE TOTAL FROM CART
+        # -------------------------------
         total_amount = cart.accumulated_total
 
         # -------------------------------
-        # PREPARE CART ITEMS FOR ORDER
+        # 2. GET PAYMENT TOKEN FIRST
+        # -------------------------------
+        payment = pay_tool.process_payment(
+            order_id="TEMP",
+            phone=phone,
+            amount=total_amount
+        )
+
+        token = payment["token"]
+        payment_link = payment["payment_link"]
+
+        # -------------------------------
+        # 3. CREATE ORDER WITH TOKEN
+        # -------------------------------
+        order = checkout.create_order(
+            customer_id=customer_id,
+            delivery_location=delivery_location,
+            total_amount=total_amount,
+            order_token=token
+        )
+
+        if not order:
+            return redirect(url_for("checkout"))
+
+        order_id = order["id"]
+
+        # -------------------------------
+        # 4. PREPARE CART ITEMS
         # -------------------------------
         cart_items = []
         for item in cart.items:
@@ -231,105 +303,95 @@ def payout():
             })
 
         # -------------------------------
-        # CREATE ORDER (DB ONLY)
-        # -------------------------------
-        order = checkout.create_order(
-            customer_id=customer_id,
-            delivery_location=delivery_location,
-            total_amount=total_amount
-        )
-
-        if not order:
-            return redirect(url_for("checkout"))
-
-        order_id = order["id"]
-
-        # -------------------------------
-        # UPLOAD IMAGES + BUILD PRODUCTS JSON
+        # 5. UPLOAD IMAGES + ATTACH PRODUCTS
         # -------------------------------
         products_json = checkout.upload_order_images(
             order_id=order_id,
             cart_items=cart_items
         )
 
-        # -------------------------------
-        # ATTACH PRODUCTS TO ORDER
-        # -------------------------------
         checkout.attach_products_to_order(
             order_id=order_id,
             products_json=products_json
         )
 
         # -------------------------------
-        # CLEAN UP TEMP FILES
-        # -------------------------------
-        for item in cart_items:
-            local_path = item.get("local_image_path")
-            if local_path and os.path.exists(local_path):
-                try:
-                    os.remove(local_path)
-                except Exception as e:
-                    print("Temp file cleanup error:", e)
-
-        # -------------------------------
-        # SAVE ORDER ID (GUARD) BEFORE clearing cart
+        # 6. SAVE SESSION GUARDS
         # -------------------------------
         session["order_id"] = order_id
+        session["transaction_id"] = token
 
         # -------------------------------
-        # CLEAR CART (IMPORTANT)
+        # 7. CLEAR CART (SAFE NOW)
         # -------------------------------
         cart.items = []
         cart.accumulated_total = 0
 
-        # calculate number of items (sum quantities)
-        number_of_items = sum((p.get("quantity") or 0) for p in products_json) if products_json else 0
-
-        return render_template(
-            "payout.html",
-            accumulated_total=total_amount,
-            number_of_items=number_of_items
-        )
+        # -------------------------------
+        # 8. REDIRECT TO PAYMENT PAGE
+        # -------------------------------
+        return redirect(payment_link)
 
     except Exception as e:
-        print("Payout route error:", e)
-        return redirect(url_for("checkout"))
+        print("Payment processing error:", e)
+        return redirect(url_for("payout"))
 
 
-@app.route('/process-payment', methods=['POST'])
-def process_payment():
-    if not session.get("order_id") or not session.get("checkout_phone"):
+@app.route("/payment-confirmation", methods=["POST"])
+def payment_confirmation():
+    data = request.json or {}
+
+    order_token = data.get("order_token")
+    payment_status = data.get("status")
+
+    if not order_token or payment_status != "SUCCESS":
+        return jsonify({"error": "Invalid confirmation"}), 400
+
+    pay_tool = Pay()
+
+    updated = pay_tool.mark_order_paid(order_token)
+
+    if not updated:
+        return jsonify({"error": "Order update failed"}), 500
+
+    return jsonify({"message": "Order confirmed"}), 200
+
+
+@app.route("/check-payment-status")
+def check_payment_status():
+    order_token = session.get("transaction_id")
+
+    if not order_token:
         return redirect(url_for("checkout"))
 
     pay_tool = Pay()
 
-    order_id = session["order_id"]
-    phone = session["checkout_phone"]
+    status = pay_tool.check_payment_status(order_token)
 
-    try:
-        amount = pay_tool.get_order_amount(order_id)
+    if status.get("status") == "SUCCESS":
+        pay_tool.mark_order_paid(order_token)
+        return redirect(url_for("paid"))
 
-        result = pay_tool.process_payment(
-            order_id=order_id,
-            phone=phone,
-            amount=amount
-        )
+    return redirect(url_for("payout"))
 
-        # Save transaction token if you want
-        session["transaction_id"] = result["token"]
-
-        # 🚀 REDIRECT TO TECHPAY HOSTED CHECKOUT
-        return redirect(result["payment_link"])
-
-    except Exception as e:
-        print(f"Payment initiation error: {e}")
-        return redirect(url_for("payout"))
 
 
 
 @app.route('/paid')
 def paid():
+    order_id = session.get("order_id")
+
+    if not order_id:
+        return redirect(url_for("checkout"))
+
+    # Clean sensitive session data
+    session.pop("transaction_id", None)
+    session.pop("order_id", None)
+    session.pop("checkout_phone", None)
+    session.pop("customer_id", None)
+
     return render_template('paid.html')
+
 
 
 @app.route('/reviews')

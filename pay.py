@@ -1,5 +1,9 @@
 import requests
-from typing import Optional
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+from typing import Optional\
 
 from supabase import create_client, Client
 from dotenv import load_dotenv
@@ -84,7 +88,7 @@ class Pay:
         url = f"{PAYMENT_BASE_URL}/checkPayment"
 
         payload = {
-            "ordertoken": order_token
+            "orderToken": order_token
         }
 
         response = requests.post(url, json=payload, timeout=30)
@@ -136,6 +140,141 @@ class Pay:
 
         except Exception as e:
             print("Error fetching order amount:", e)
+            return None
+
+
+    def notify_business_new_order(self, order_id):
+        try:
+            order_resp = (
+                self.supabase
+                .table("orders")
+                .select("id,total_amount,business_id")
+                .eq("id", order_id)
+                .single()
+                .execute()
+            )
+
+            order = order_resp.data
+            if not order:
+                return None
+
+            message = f"New paid order received. Total value: ZMW {order['total_amount']}."
+
+            self.supabase.table("notifications").insert({
+                "business_id": order["business_id"],
+                "title": "New Order Paid",
+                "message": message,
+                "notification_type": "order",
+                "status": "unread",
+                "priority": "normal",
+                "category": "order",
+                "action_url": f"/orders/{order_id}",
+                "action_label": "View Order"
+            }).execute()
+
+            return True
+
+        except Exception as e:
+            print("Notification error:", e)
+            return None
+
+    def mark_order_paid(self, order_token):
+        try:
+            response = (
+                self.supabase
+                .table("orders")
+                .update({
+                    "order_payment_status": "completed",
+                    "order_status": "confirmed"
+                })
+                .eq("orderToken", order_token)
+                .select()
+                .single()
+                .execute()
+            )
+
+            order = response.data
+            if not order:
+                return None
+
+            self.notify_business_new_order(order["id"])
+            self.create_receipt(order)
+            self.send_receipt_email(order)  # 📧 NEW
+
+            return order
+
+        except Exception as e:
+            print("Failed to mark order paid:", e)
+            return None
+
+    def create_receipt(self, order):
+        try:
+            payload = {
+                "order_id": order["id"],
+                "business_id": order["business_id"],
+                "customer_id": order["customer_id"],
+                "amount": order["total_amount"],
+                "currency": "ZMW",
+                "status": "paid"
+            }
+
+            self.supabase.table("receipts").insert(payload).execute()
+            return True
+
+        except Exception as e:
+            print("Receipt creation failed:", e)
+            return None
+
+    def send_receipt_email(self, order):
+        try:
+            # Fetch customer email
+            customer_resp = (
+                self.supabase
+                .table("customers")
+                .select("email,name")
+                .eq("id", order["customer_id"])
+                .single()
+                .execute()
+            )
+
+            customer = customer_resp.data
+            if not customer or not customer.get("email"):
+                return None
+
+            msg = MIMEMultipart()
+            msg["From"] = os.getenv("EMAIL_USER")
+            msg["To"] = customer["email"]
+            msg["Subject"] = "Payment Successful – Receipt"
+
+            body = f"""
+    Hello {customer.get('name', '')},
+
+    Thank you for your payment.
+
+    Order ID: {order['id']}
+    Amount Paid: ZMW {order['total_amount']}
+
+    Your order has been successfully received and confirmed.
+
+    Regards,
+    InXource Payments
+            """
+
+            msg.attach(MIMEText(body, "plain"))
+
+            server = smtplib.SMTP("smtp.gmail.com", 587)
+            server.starttls()
+            server.login(
+                os.getenv("EMAIL_USER"),
+                os.getenv("EMAIL_KEY")
+            )
+            server.send_message(msg)
+            server.quit()
+
+            return True
+
+        except Exception as e:
+            print("Email sending failed:", e)
             return None
 
 

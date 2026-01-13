@@ -128,7 +128,8 @@ class Checkout:
             print(f"Error fetching customer: {e}")
             return None
 
-    def create_order(self, customer_id, delivery_location, total_amount):
+    def create_order(self, customer_id, delivery_location, total_amount, order_token):
+
         """
         Creates an order row WITHOUT products.
         Products are attached later.
@@ -137,11 +138,12 @@ class Checkout:
             payload = {
                 "business_id": self.business_id,
                 "customer_id": customer_id,
-                "total_amount": str(total_amount),  # keep consistent with DB
+                "total_amount": str(total_amount),
                 "order_status": "pending",
                 "order_payment_status": "pending",
+                "orderToken": order_token,
                 "delivery_location": delivery_location,
-                "products": []  # initialize as empty JSON array
+                "products": []
             }
 
             response = (
@@ -163,7 +165,7 @@ class Checkout:
     def upload_order_images(self, order_id, cart_items):
         """
         Upload product images and return products JSON
-        matching DB structure exactly.
+        MATCHING the TypeScript / dashboard structure.
         """
         products_json = []
 
@@ -171,9 +173,12 @@ class Checkout:
             image_url = None
             local_path = item.get("local_image_path")
 
+            # -------------------------------
+            # UPLOAD IMAGE (IF PRESENT)
+            # -------------------------------
             if local_path:
                 filename = os.path.basename(local_path)
-                storage_path = f"orders/{order_id}/{filename}"
+                storage_path = f"orders/{order_id}/products/{item['product_id']}/{filename}"
 
                 with open(local_path, "rb") as f:
                     self.supabase.storage \
@@ -185,11 +190,20 @@ class Checkout:
                     f"uploaded-files/{storage_path}"
                 )
 
+                # 🧹 CLEAN UP TEMP FILE
+                try:
+                    os.remove(local_path)
+                except Exception:
+                    pass
+
+            # -------------------------------
+            # MATCH TS PRODUCT SHAPE
+            # -------------------------------
             products_json.append({
                 "product_id": item["product_id"],
                 "quantity": item["quantity"],
-                "instruction": item.get("instruction"),
-                "image_url": image_url
+                "specialInstructions": item.get("instruction"),
+                "images": image_url
             })
 
         return products_json
