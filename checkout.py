@@ -190,7 +190,7 @@ class Checkout:
                     f"uploaded-files/{storage_path}"
                 )
 
-                # 🧹 CLEAN UP TEMP FILE
+                # CLEAN UP TEMP FILE
                 try:
                     os.remove(local_path)
                 except Exception:

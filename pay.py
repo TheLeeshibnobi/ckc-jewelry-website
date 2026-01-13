@@ -55,7 +55,7 @@ class Pay:
         response = requests.post(url, json=payload, timeout=30)
 
         print("GET TOKEN STATUS:", response.status_code)
-        print("GET TOKEN RESPONSE:", response.text)  # 👈 IMPORTANT
+        print("GET TOKEN RESPONSE:", response.text)
 
         if response.status_code != 200:
             raise Exception(f"Failed to get token: {response.text}")
@@ -199,7 +199,7 @@ class Pay:
 
             self.notify_business_new_order(order["id"])
             self.create_receipt(order)
-            self.send_receipt_email(order)  # 📧 NEW
+            self.send_receipt_email(order)
 
             return order
 
