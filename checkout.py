@@ -129,10 +129,11 @@ class Checkout:
             return None
 
     def create_order(self, customer_id, delivery_location, total_amount, order_token):
-
         """
-        Creates an order row WITHOUT products.
-        Products are attached later.
+        Creates an order row ONLY.
+        - NO products
+        - NO images
+        - Products are attached later (React-aligned flow)
         """
         try:
             payload = {
@@ -164,13 +165,19 @@ class Checkout:
 
     def upload_order_images(self, order_id, cart_items):
         """
-        Upload product images and return products JSON
-        MATCHING the TypeScript / dashboard structure.
+        Upload PRODUCT images only.
+
+        React-aligned rules:
+        - There is NO main order image.
+        - Each product may have 0 or 1 image.
+        - Images are stored at:
+            orders/{order_id}/products/{product_id}/{filename}
+        - The database NEVER stores image URLs.
         """
+
         products_json = []
 
         for item in cart_items:
-            image_url = None
             local_path = item.get("local_image_path")
 
             # -------------------------------
@@ -180,15 +187,13 @@ class Checkout:
                 filename = os.path.basename(local_path)
                 storage_path = f"orders/{order_id}/products/{item['product_id']}/{filename}"
 
-                with open(local_path, "rb") as f:
-                    self.supabase.storage \
-                        .from_("uploaded-files") \
-                        .upload(storage_path, f.read())
-
-                image_url = (
-                    f"{SUPABASE_URL}/storage/v1/object/public/"
-                    f"uploaded-files/{storage_path}"
-                )
+                try:
+                    with open(local_path, "rb") as f:
+                        self.supabase.storage \
+                            .from_("uploaded-files") \
+                            .upload(storage_path, f.read())
+                except Exception as e:
+                    print(f"Failed to upload image for product {item.get('product_id')}: {e}")
 
                 # CLEAN UP TEMP FILE
                 try:
@@ -197,13 +202,12 @@ class Checkout:
                     pass
 
             # -------------------------------
-            # MATCH TS PRODUCT SHAPE
+            # MATCH TS PRODUCT SHAPE (NO IMAGES FIELD)
             # -------------------------------
             products_json.append({
                 "product_id": item["product_id"],
                 "quantity": item["quantity"],
-                "specialInstructions": item.get("instruction"),
-                "images": image_url
+                "specialInstructions": item.get("instruction")
             })
 
         return products_json

@@ -293,12 +293,15 @@ def process_payment():
         # -------------------------------
         # 4. PREPARE CART ITEMS
         # -------------------------------
+        # -------------------------------
+        # 4. PREPARE CART ITEMS (TS-ALIGNED)
+        # -------------------------------
         cart_items = []
         for item in cart.items:
             cart_items.append({
                 "product_id": item["product_id"],
                 "quantity": item["quantity"],
-                "instruction": item.get("instruction"),
+                "specialInstructions": item.get("instruction"),
                 "local_image_path": item.get("local_image_path")
             })
 
