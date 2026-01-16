@@ -264,6 +264,91 @@ class Checkout:
             print(f"Error creating customer: {e}")
             return None
 
+    def create_order_notification(
+            self,
+            user_id,
+            business_id,
+            order_id,
+            products,
+            ordered_at
+    ):
+        """
+        Python equivalent of TS createOrderNotification()
+        Runs IMMEDIATELY after order creation (not payment).
+        """
+
+        try:
+            # -------------------------------
+            # 1. PRODUCT SUMMARY LOGIC
+            # -------------------------------
+            total_items = sum(item.get("quantity", 0) for item in products)
+
+            primary_product = products[0].get("name", "Item")
+            primary_qty = products[0].get("quantity", 1)
+
+            other_items_count = total_items - primary_qty
+
+            item_summary = f"{primary_qty}x {primary_product}"
+            if len(products) > 1 or other_items_count > 0:
+                additional_count = len(products) - 1
+                item_summary += f" and {additional_count} other item{'s' if additional_count > 1 else ''}"
+
+            # -------------------------------
+            # 2. TOTAL AMOUNT
+            # -------------------------------
+            total_amount = sum(
+                (item.get("price", 0) * item.get("quantity", 0))
+                for item in products
+            )
+
+            # -------------------------------
+            # 3. HUMAN MESSAGE
+            # -------------------------------
+            message = (
+                f"A new order has been placed for {item_summary}. "
+                f"Total value: ZMW {int(total_amount):,}. "
+                f"Received on {ordered_at}."
+            )
+
+            # -------------------------------
+            # 4. INSERT NOTIFICATION
+            # -------------------------------
+            self.supabase.table("notifications").insert({
+                "user_id": user_id,
+                "business_id": business_id,
+                "title": "New Order Received",
+                "message": message,
+                "notification_type": "order",
+                "priority": "normal",
+                "status": "unread",
+                "category": "order",
+                "action_url": f"/orders/{order_id}",
+                "action_label": "View Order Details",
+                "metadata": {
+                    "orderId": order_id,
+                    "totalAmount": total_amount,
+                    "items": [
+                        {
+                            "id": item.get("product_id"),
+                            "name": item.get("name"),
+                            "price": item.get("price"),
+                            "quantity": item.get("quantity"),
+                            "specialInstructions": item.get("specialInstructions"),
+                        }
+                        for item in products
+                    ],
+                },
+                "tags": ["order", "new"],
+                "created_at": ordered_at,
+                "updated_at": ordered_at,
+            }).execute()
+
+            return True
+
+        except Exception as e:
+            print("Failed to create order notification:", e)
+            return False
+
 
 
 

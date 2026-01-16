@@ -259,7 +259,7 @@ def process_payment():
         delivery_location = session.get("delivery_location", "")
 
         # -------------------------------
-        # 1. CALCULATE TOTAL FROM CART
+        # 1. CALCULATE TOTAL
         # -------------------------------
         total_amount = cart.accumulated_total
 
@@ -276,7 +276,7 @@ def process_payment():
         payment_link = payment["payment_link"]
 
         # -------------------------------
-        # 3. CREATE ORDER WITH TOKEN
+        # 3. CREATE ORDER (NO PRODUCTS YET)
         # -------------------------------
         order = checkout.create_order(
             customer_id=customer_id,
@@ -291,13 +291,21 @@ def process_payment():
         order_id = order["id"]
 
         # -------------------------------
-        # 4. PREPARE CART ITEMS
+        # 4. PREPARE PRODUCTS (TS SHAPE)
+        # IMPORTANT: includes name + price
         # -------------------------------
-        # -------------------------------
-        # 4. PREPARE CART ITEMS (TS-ALIGNED)
-        # -------------------------------
+        products_for_notification = []
         cart_items = []
+
         for item in cart.items:
+            products_for_notification.append({
+                "product_id": item["product_id"],
+                "name": item["name"],
+                "price": item["price"],
+                "quantity": item["quantity"],
+                "specialInstructions": item.get("instruction"),
+            })
+
             cart_items.append({
                 "product_id": item["product_id"],
                 "quantity": item["quantity"],
@@ -306,7 +314,18 @@ def process_payment():
             })
 
         # -------------------------------
-        # 5. UPLOAD IMAGES + ATTACH PRODUCTS
+        # 5. CREATE ORDER NOTIFICATION
+        # -------------------------------
+        checkout.create_order_notification(
+            user_id=customer_id,
+            business_id=checkout.business_id,
+            order_id=order_id,
+            products=products_for_notification,
+            ordered_at=order["created_at"]
+        )
+
+        # -------------------------------
+        # 6. UPLOAD IMAGES + ATTACH PRODUCTS
         # -------------------------------
         products_json = checkout.upload_order_images(
             order_id=order_id,
@@ -319,25 +338,26 @@ def process_payment():
         )
 
         # -------------------------------
-        # 6. SAVE SESSION GUARDS
+        # 7. SAVE SESSION
         # -------------------------------
         session["order_id"] = order_id
         session["transaction_id"] = token
 
         # -------------------------------
-        # 7. CLEAR CART (SAFE NOW)
+        # 8. CLEAR CART
         # -------------------------------
         cart.items = []
         cart.accumulated_total = 0
 
         # -------------------------------
-        # 8. REDIRECT TO PAYMENT PAGE
+        # 9. REDIRECT TO PAYMENT
         # -------------------------------
         return redirect(payment_link)
 
     except Exception as e:
         print("Payment processing error:", e)
         return redirect(url_for("payout"))
+
 
 
 @app.route("/payment-confirmation", methods=["POST"])

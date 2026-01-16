@@ -142,13 +142,17 @@ class Pay:
             print("Error fetching order amount:", e)
             return None
 
+    def notify_business_payment_received(self, order_id):
+        """
+        Payment-only notification.
+        Order notification is already created at order placement.
+        """
 
-    def notify_business_new_order(self, order_id):
         try:
             order_resp = (
                 self.supabase
                 .table("orders")
-                .select("id,total_amount,business_id")
+                .select("id,total_amount,business_id,customer_id,created_at")
                 .eq("id", order_id)
                 .single()
                 .execute()
@@ -158,24 +162,31 @@ class Pay:
             if not order:
                 return None
 
-            message = f"New paid order received. Total value: ZMW {order['total_amount']}."
+            message = (
+                f"Payment received for Order #{order_id}. "
+                f"Amount: ZMW {int(order['total_amount']):,}."
+            )
 
             self.supabase.table("notifications").insert({
                 "business_id": order["business_id"],
-                "title": "New Order Paid",
+                "user_id": order["customer_id"],
+                "title": "Payment Received",
                 "message": message,
-                "notification_type": "order",
+                "notification_type": "payment",
                 "status": "unread",
                 "priority": "normal",
-                "category": "order",
+                "category": "payment",
                 "action_url": f"/orders/{order_id}",
-                "action_label": "View Order"
+                "action_label": "View Order",
+                "created_at": order["created_at"],
+                "updated_at": order["created_at"],
+                "tags": ["payment"]
             }).execute()
 
             return True
 
         except Exception as e:
-            print("Notification error:", e)
+            print("Payment notification error:", e)
             return None
 
     def mark_order_paid(self, order_token):
@@ -197,7 +208,7 @@ class Pay:
             if not order:
                 return None
 
-            self.notify_business_new_order(order["id"])
+            self.notify_business_payment_received(order["id"])
             self.create_receipt(order)
             self.send_receipt_email(order)
 
